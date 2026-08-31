@@ -11,6 +11,8 @@ from res.logical_input import (
     NORTH,
     RIGHT,
     SOUTH,
+    TL,
+    TR,
     UP,
     WEST,
     dpad_direction_for,
@@ -23,6 +25,14 @@ class TestFaceButtons(unittest.TestCase):
 
     def test_face_buttons_are_distinct(self):
         self.assertEqual(len(set(FACE_BUTTONS)), 4)
+
+    def test_face_buttons_and_shoulders_are_disjoint_from_directions(self):
+        # Upstream this was structurally impossible (roles were evdev
+        # integers, directions were strings — different types). Now both
+        # are plain strings sharing one namespace, so nothing prevents a
+        # future addition from accidentally colliding a role name with a
+        # direction name. Guard it explicitly.
+        self.assertTrue(DIRECTIONS.isdisjoint({*FACE_BUTTONS, TL, TR}))
 
 
 class TestDirections(unittest.TestCase):
