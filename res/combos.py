@@ -10,6 +10,35 @@ evdev doesn't exist on Windows. Keyboard-macro outputs (TABLE_1/TABLE_2
 values) are plain glyph strings rather than evdev KEY_* codes — a later
 Windows I/O plan's output layer turns a glyph into a SendInput
 keystroke.
+
+TABLE_1/TABLE_2 use three non-ASCII glyphs (Å, Ä, Ö) plus three
+punctuation glyphs (`,` `.` `-`) that carry hard-won context from the
+Linux source project, recorded here so it isn't lost: the Linux
+source's physical-key choices for these six glyphs assumed a Swedish
+(`se`) X11 keyboard layout, combined with evdev's convention that
+KEY_* codes name US-layout *physical positions* regardless of the
+active layout (see the Linux source's `res/combos.py` and
+`docs/findings.md`). Concretely, under that Swedish layout, the
+physical keys that produce these glyphs are: Å -> KEY_LEFTBRACE,
+Ä -> KEY_APOSTROPHE, Ö -> KEY_SEMICOLON, `,` -> KEY_COMMA,
+`.` -> KEY_DOT, `-` -> KEY_MINUS.
+
+Whoever writes the Windows glyph->keystroke translator (Plan 2's
+`res/sendinput_output.py`) must explicitly decide between two
+different SendInput strategies, because they need different glyph
+tables:
+  - Virtual-key-code SendInput (layout-aware): the OS maps a VK code
+    to a physical key using the *active* Windows keyboard layout.
+    Glyph->VK is straightforward for plain letters, but ambiguous for
+    Swedish-specific punctuation/Nordic glyphs like the six above —
+    there's no single VK constant for "Å" independent of layout.
+  - Scancode-based SendInput (KEYEVENTF_SCANCODE, layout-independent):
+    addresses a physical key position regardless of the active
+    layout, same as evdev did. This needs the same
+    US-layout-physical-position table the Linux source used (the six
+    mappings above), not a fresh one derived from VK codes.
+Do not assume one strategy without deciding explicitly — mixing them
+will silently send the wrong physical key for the Nordic glyphs.
 """
 
 from res.logical_input import (

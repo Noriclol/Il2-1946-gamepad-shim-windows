@@ -31,6 +31,7 @@ Decisions already settled (from the grill-me session, 2026-08-31) that both plan
 - Whether IL-2 1946 natively binds to a vJoy DirectInput device the same way it bound to the Linux source's evdev/uinput gamepad — repeat the HOTAS CONTROL binding verification from the Linux source's `docs/operations.md`.
 - Whether the DirectInput instance-registry caching behavior described in the Linux source's `docs/problem.md` (§DirectInput's own instance registry) also affects native Windows DirectInput the same way it affected Wine's emulation of it — unconfirmed, worth a quick registry check (`HKCU\...\DirectInput\VID_xxxx&PID_yyyy\Calibration`) once a Windows machine is available, since it could still matter even without Wine in the picture.
 - `SendInput` behavior under whatever anti-cheat or focus-stealing-prevention IL-2 1946 (or Windows itself) applies to games — confirm keystrokes/mouse motion actually reach the game window while it's focused.
+- The glyph->keystroke table in `res/sendinput_output.py` needs an explicit choice between VK-code SendInput (layout-aware, ambiguous for Swedish-specific glyphs) and scancode SendInput (layout-independent, needs a US-physical-position table) — it must account for the Swedish (`se`) layout assumption inherited from the Linux source. The three Nordic glyphs' known physical-key mapping (Å/Ä/Ö -> KEY_LEFTBRACE/KEY_APOSTROPHE/KEY_SEMICOLON) plus the punctuation glyphs (`,`/`.`/`-`) is recorded in `res/combos.py`'s module docstring.
 
 ## Plan 3 (sketch): Installer / packaging
 
