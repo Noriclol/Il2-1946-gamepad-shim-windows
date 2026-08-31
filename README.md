@@ -8,6 +8,24 @@ The Linux source project runs the game under Wine/Proton and solves a hard devic
 
 Portable logic core (rudder fold, mouse-look math, chorded-combo detection) and I/O-layer groundwork (controller profiles, device scanning, config persistence, vJoy output mapping) are implemented and unit tested. Not yet built: the keyboard-macro output layer (`res/sendinput_output.py` — the VK-code-vs-scancode decision needs testing on real Windows hardware), the `res/main.py` event-loop wiring, and an installer. See `docs/superpowers/plans/` for the implementation plans and `docs/superpowers/plans/2026-08-31-windows-port-roadmap.md` for what's left and why it's sequenced this way.
 
+## For a Windows tester: run the diagnostics
+
+If you have a Windows machine with the controller(s) plugged in — and ideally IL-2 1946 installed — this project needs a few things checked that can only be verified on real Windows hardware. `scripts/windows_diagnostics.py` walks through all of them and writes everything to `log.txt` at the repo root.
+
+```bat
+git clone <this repo>
+cd Il2-1946-gamepad-shim-windows
+python -m venv venv
+venv\Scripts\pip install pygame pyvjoy
+venv\Scripts\python scripts\windows_diagnostics.py
+```
+
+`pyvjoy` also needs the [vJoy driver](http://vjoystick.sourceforge.net/) itself installed separately — `pip install` alone won't get you that. If you don't have it installed yet, that's fine: the script detects it's missing, says so in the log, and moves on to the other checks rather than failing.
+
+It'll print everything to the screen as it goes and ask you to press a few buttons and move the sticks/triggers along the way — just follow the prompts, there's no rush between them. When it's done, send the resulting `log.txt` back.
+
+It only reads — no registry writes, no install steps, and no keystrokes or mouse motion get sent to any other window.
+
 ## Running the tests
 
 ```bash
