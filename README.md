@@ -6,7 +6,7 @@ The Linux source project runs the game under Wine/Proton and solves a hard devic
 
 ## Status
 
-Portable logic core (rudder fold, mouse-look math, chorded-combo detection) and I/O-layer groundwork (controller profiles, device scanning, config persistence, vJoy output mapping) are implemented and unit tested. `res/main.py` now wires a minimal DS4-only pipeline — left-stick + trigger passthrough, rudder fold, right-stick mouse-look, and the four face buttons + TL/TR — onto two real vJoy devices and SendInput mouse motion, verified against a real DS4's pygame button indices (see `res/profiles.py`). Not yet built: the keyboard-macro half of `res/sendinput_output.py` (the VK-code-vs-scancode decision needs testing on real Windows hardware), D-pad-driven combos, and an installer. See `docs/superpowers/plans/` for the implementation plans and `docs/superpowers/plans/2026-08-31-windows-port-roadmap.md` for what's left and why it's sequenced this way.
+Portable logic core (rudder fold, mouse-look math, chorded-combo detection) and I/O-layer groundwork (controller profiles, device scanning, config persistence, vJoy output mapping) are implemented and unit tested. `res/main.py` now wires a DS4-only pipeline — left-stick + trigger passthrough, rudder fold, right-stick mouse-look, the four face buttons + TL/TR, and all 36 chorded keyboard/gamepad macros — onto two real vJoy devices and SendInput mouse + keyboard motion, verified against a real DS4's pygame button indices (see `res/profiles.py`). The keyboard side uses scancode-based `SendInput` (layout-independent), decided in `res/sendinput_output.py`. Caveat: only D-pad UP's button index is hardware-verified; DOWN/LEFT/RIGHT (`res/profiles.py`'s `PROFILE_DS4.dpad_button_map`) are a guessed sequential continuation pending a real diagnostic run, so the 16 D-pad-direction combos may bind the wrong physical direction until that's confirmed. Not yet built: an installer. See `docs/superpowers/plans/` for the implementation plans and `docs/superpowers/plans/2026-08-31-windows-port-roadmap.md` for what's left and why it's sequenced this way.
 
 ## For a Windows tester: try the shim itself (DS4 only, for now)
 
@@ -20,8 +20,9 @@ This needs the [vJoy driver](http://vjoystick.sourceforge.net/) installed and **
 3. Install [Python 3.12](https://www.python.org/downloads/) (check "Add python.exe to PATH" during install) if you haven't already.
 4. Download this repo as a zip, extract it, and double-click `launch.bat` in the extracted folder.
 5. It'll ask you to pick your controller from a list (press Enter for the default) — then moving the left stick and pressing South/East/West/North/TL/TR should move vJoy's device #1 live, pulling either trigger should move device #2's axis, and moving the right stick should move the real mouse cursor. You can check the vJoy devices in Windows' own "Set up USB game controllers" (`joy.cpl`) or in `vJoyConf`'s monitor tab.
+6. Chorded macros are live too: hold a face button and tap a D-pad direction (or the reverse — hold a direction and tap a face button) to send a keystroke, and hold a face button then tap TL+TR together to fire that same face button's role back onto vJoy's gamepad device. See `res/combos.py` for the full 36-combo table. D-pad-direction combos ride on an unverified guess for DOWN/LEFT/RIGHT's button indices (see Status above) — if they fire on the wrong physical direction, that's why; face-button and TL+TR combos don't have this caveat.
 
-Keyboard-macro combos aren't wired up yet, so those won't do anything. Press Ctrl+C in the console window to stop.
+Press Ctrl+C in the console window to stop.
 
 ## For a Windows tester: run the diagnostics
 

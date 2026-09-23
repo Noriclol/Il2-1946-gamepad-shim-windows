@@ -1,8 +1,14 @@
 import threading
 import unittest
 
+from res.combos import TABLE_1, TABLE_2
 from res.mouse_look import MouseLookState
-from res.sendinput_output import mouse_tick_loop, send_relative_mouse_move
+from res.sendinput_output import (
+    SCANCODE_MAP,
+    mouse_tick_loop,
+    send_relative_mouse_move,
+    tap_scancode_key,
+)
 
 
 class TestSendRelativeMouseMoveNoOp(unittest.TestCase):
@@ -10,6 +16,29 @@ class TestSendRelativeMouseMoveNoOp(unittest.TestCase):
         # Only the zero/zero case is testable off Windows -- any other
         # input would reach ctypes.windll, which doesn't exist here.
         send_relative_mouse_move(0, 0)
+
+
+class TestScancodeMap(unittest.TestCase):
+    def test_covers_every_combo_output_glyph(self):
+        # All 32 TABLE_1/TABLE_2 glyphs must have a scancode, or a real
+        # combo fire would silently do nothing (see res.main.dispatch_fire).
+        glyphs = set(TABLE_1.values()) | set(TABLE_2.values())
+        missing = glyphs - SCANCODE_MAP.keys()
+        self.assertEqual(missing, set())
+
+    def test_entries_are_distinct_scancodes(self):
+        self.assertEqual(len(SCANCODE_MAP.values()), len(set(SCANCODE_MAP.values())))
+
+
+class TestTapScancodeKey(unittest.TestCase):
+    def test_presses_then_releases_with_a_hold_in_between(self):
+        calls = []
+        tap_scancode_key(
+            0x10,
+            send_key=lambda scancode, key_up: calls.append((scancode, key_up)),
+            hold_seconds=0,
+        )
+        self.assertEqual(calls, [(0x10, False), (0x10, True)])
 
 
 class TestMouseTickLoop(unittest.TestCase):

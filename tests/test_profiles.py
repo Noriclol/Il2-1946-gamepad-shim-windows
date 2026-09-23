@@ -1,6 +1,6 @@
 import unittest
 
-from res.logical_input import EAST, NORTH, SOUTH, TL, TR, WEST
+from res.logical_input import DOWN, EAST, LEFT, NORTH, RIGHT, SOUTH, TL, TR, UP, WEST
 from res.profiles import (
     AXIS_LT,
     AXIS_RT,
@@ -38,6 +38,8 @@ class TestControllerProfileValidation(unittest.TestCase):
         self.assertEqual(profile.button_map, {})
         self.assertIsNone(profile.hat_index)
         self.assertFalse(profile.button_mapping_verified)
+        self.assertEqual(profile.dpad_button_map, {})
+        self.assertFalse(profile.dpad_mapping_verified)
 
 
 class TestProfile8BitDo(unittest.TestCase):
@@ -79,6 +81,16 @@ class TestProfileDS4(unittest.TestCase):
         # This pad reports 0 hats -- its D-pad is exposed as extra
         # buttons instead, so hat_index stays unverified/unpopulated.
         self.assertIsNone(PROFILE_DS4.hat_index)
+
+    def test_dpad_button_map_is_guessed_and_unverified(self):
+        # Only UP=15 is confirmed against real hardware (2026-09-23
+        # diagnostic run); DOWN/LEFT/RIGHT are a guessed sequential
+        # continuation pending confirmation.
+        self.assertEqual(
+            PROFILE_DS4.dpad_button_map,
+            {UP: 15, DOWN: 16, LEFT: 17, RIGHT: 18},
+        )
+        self.assertFalse(PROFILE_DS4.dpad_mapping_verified)
 
     def test_is_registered(self):
         self.assertIn(PROFILE_DS4, PROFILES)

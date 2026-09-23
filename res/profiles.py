@@ -30,16 +30,24 @@ PROFILE_DS4's face buttons and shoulder buttons ARE now verified, from
 a real DS4 diagnostic run (scripts/windows_diagnostics.py) on Windows,
 2026-09-23: SOUTH=0, EAST=1, WEST=2, NORTH=3, TL=9, TR=10. That run's
 pad reported 0 hats -- its D-pad is exposed as extra buttons instead
-(D-pad UP verified as button 15), so hat_index stays None; D-pad-driven
-combos aren't wired up yet as a result. The same run's pygame device
-name was "PS4 Controller" (USB), not "Wireless Controller" (the
-Bluetooth name this project's name_match was written against) -- hence
-name_match now accepts multiple aliases per profile.
+(D-pad UP verified as button 15), so hat_index stays None. The same
+run's pygame device name was "PS4 Controller" (USB), not "Wireless
+Controller" (the Bluetooth name this project's name_match was written
+against) -- hence name_match now accepts multiple aliases per profile.
+
+dpad_button_map (direction role -> pygame button index) carries the
+D-pad-as-buttons mapping for a pad like PROFILE_DS4's, feeding
+res.combo_detector.ComboDetector.on_dpad_direction. Only UP=15 is
+hardware-verified for PROFILE_DS4; DOWN=16/LEFT=17/RIGHT=18 are a
+guessed sequential continuation (not confirmed against real hardware),
+hence dpad_mapping_verified=False -- see
+docs/superpowers/plans/2026-08-31-windows-port-roadmap.md for getting
+those three confirmed via scripts/windows_diagnostics.py.
 """
 
 from dataclasses import dataclass, field
 
-from res.logical_input import EAST, NORTH, SOUTH, TL, TR, WEST
+from res.logical_input import DOWN, EAST, LEFT, NORTH, RIGHT, SOUTH, TL, TR, UP, WEST
 
 AXIS_X = "X"
 AXIS_Y = "Y"
@@ -74,6 +82,14 @@ class ControllerProfile:
     button_mapping_verified=False can still drive the rudder fold, mouse
     look, and X/Y passthrough (all axis-only), but combo macros can't
     run yet.
+
+    dpad_button_map: logical direction role (UP/DOWN/LEFT/RIGHT) ->
+    pygame button index, for a pad that reports its D-pad as buttons
+    rather than a hat (see hat_index). Empty until populated.
+
+    dpad_mapping_verified: False until dpad_button_map has been
+    confirmed against real hardware, independent of
+    button_mapping_verified.
     """
 
     name_match: tuple
@@ -81,6 +97,8 @@ class ControllerProfile:
     button_map: dict = field(default_factory=dict)
     hat_index: int | None = None
     button_mapping_verified: bool = False
+    dpad_button_map: dict = field(default_factory=dict)
+    dpad_mapping_verified: bool = False
 
     def __post_init__(self):
         missing = [role for role in REQUIRED_AXIS_ROLES if role not in self.axis_map]
@@ -121,6 +139,13 @@ PROFILE_DS4 = ControllerProfile(
         TR: 10,
     },
     button_mapping_verified=True,
+    dpad_button_map={
+        UP: 15,
+        DOWN: 16,
+        LEFT: 17,
+        RIGHT: 18,
+    },
+    dpad_mapping_verified=False,
 )
 
 PROFILES = (PROFILE_8BITDO, PROFILE_DS4)

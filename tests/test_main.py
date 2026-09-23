@@ -1,7 +1,9 @@
 import unittest
 
+from res.combo_detector import ComboDetector, Fire, GAMEPAD, KEYBOARD
+from res.combos import NORTH, TABLE_1, TABLE_2, TABLE_3, TL, TR, UP, WEST
 from res.logical_input import SOUTH
-from res.main import axis_to_vjoy, run
+from res.main import EdgeTracker, axis_to_vjoy, run
 from res.mouse_look import MouseLookState
 from res.profiles import PROFILE_DS4
 from res.rudder import RUDDER_CENTRE
@@ -120,6 +122,89 @@ class TestRun(unittest.TestCase):
         vx, vy = mouse_state.get()
         self.assertGreater(vx, 0.0)
         self.assertGreater(vy, 0.0)
+
+
+def _all_buttons_up():
+    indices = set(PROFILE_DS4.button_map.values()) | set(
+        PROFILE_DS4.dpad_button_map.values()
+    )
+    return {index: False for index in indices}
+
+
+class TestComboIntegration(unittest.TestCase):
+    def setUp(self):
+        self.axes = {0: 0.0, 1: 0.0, 2: 0.0, 3: 0.0, 4: -1.0, 5: -1.0}
+        self.buttons = _all_buttons_up()
+        self.output = _FakeOutput()
+        self.rudder_output = _FakeRudderOutput()
+        self.mouse_state = MouseLookState()
+        self.combo_detector = ComboDetector()
+        self.edge_tracker = EdgeTracker()
+        self.fires = []
+
+    def _run(self):
+        joystick = _FakeJoystick(self.axes, self.buttons)
+        run(
+            joystick,
+            PROFILE_DS4,
+            self.output,
+            self.rudder_output,
+            self.mouse_state,
+            combo_detector=self.combo_detector,
+            edge_tracker=self.edge_tracker,
+            dispatch_fire=lambda fire, output: self.fires.append(fire),
+        )
+
+    def test_table_1_button_then_dpad_direction_fires(self):
+        self.buttons[PROFILE_DS4.button_map[NORTH]] = True
+        self._run()
+        self.assertEqual(self.fires, [])
+
+        self.buttons[PROFILE_DS4.dpad_button_map[UP]] = True
+        self._run()
+        self.assertEqual(self.fires, [Fire(KEYBOARD, TABLE_1[(NORTH, UP)])])
+
+    def test_table_2_dpad_direction_then_button_fires(self):
+        self.buttons[PROFILE_DS4.dpad_button_map[UP]] = True
+        self._run()
+        self.assertEqual(self.fires, [])
+
+        self.buttons[PROFILE_DS4.button_map[NORTH]] = True
+        self._run()
+        self.assertEqual(self.fires, [Fire(KEYBOARD, TABLE_2[(UP, NORTH)])])
+
+    def test_held_combo_does_not_refire_every_frame(self):
+        self.buttons[PROFILE_DS4.button_map[NORTH]] = True
+        self._run()
+        self.buttons[PROFILE_DS4.dpad_button_map[UP]] = True
+        self._run()
+        self.assertEqual(len(self.fires), 1)
+
+        # Nothing changed -- polling the same held state again must not
+        # refire the combo.
+        self._run()
+        self._run()
+        self.assertEqual(len(self.fires), 1)
+
+    def test_table_3_both_shoulders_while_face_button_held_fires_self_mapped(self):
+        self.buttons[PROFILE_DS4.button_map[WEST]] = True
+        self._run()
+
+        self.buttons[PROFILE_DS4.button_map[TL]] = True
+        self._run()
+        self.assertEqual(self.fires, [])
+        # Suppressed: no face-button-less TL passthrough while WEST is held.
+        self.assertNotIn(TL, self.output.buttons)
+
+        self.buttons[PROFILE_DS4.button_map[TR]] = True
+        self._run()
+        self.assertEqual(self.fires, [Fire(GAMEPAD, TABLE_3[WEST])])
+
+    def test_shoulder_forwards_normally_with_no_face_button_held(self):
+        self.buttons[PROFILE_DS4.button_map[TL]] = True
+        self._run()
+        self.assertEqual(self.fires, [])
+        self.assertTrue(self.output.buttons[TL])
 
 
 if __name__ == "__main__":
