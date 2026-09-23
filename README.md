@@ -10,13 +10,16 @@ Portable logic core (rudder fold, mouse-look math, chorded-combo detection) and 
 
 ## For a Windows tester: try the shim itself (DS4 only, for now)
 
-This needs the [vJoy driver](http://vjoystick.sourceforge.net/) installed and its device #1 configured **before** running the shim, one time only:
+This needs the [vJoy driver](http://vjoystick.sourceforge.net/) installed and **two** of its devices configured **before** running the shim, one time only. The rudder is deliberately its own separate device rather than an axis on the gamepad device — carbon-copying a structural fix from the Linux source project, where a shared gamepad-shaped device corrupted the rudder signal under Wine; see `res/vjoy_output.py` for the full reasoning.
 
 1. Install the vJoy driver from the link above (it's a community-signed driver — if Windows refuses it, you may need to enable test-signing mode; see the roadmap doc).
-2. Run `vJoyConf` (installed alongside the driver) and configure **device #1** with axes **X, Y, Rz** and at least **6 buttons**. Leave everything else default. Click Apply/enable the device.
+2. Run `vJoyConf` (installed alongside the driver) and configure:
+   - **Device #1**: axes **X, Y** and at least **6 buttons**. Leave everything else default.
+   - **Device #2**: a single axis (any one, e.g. X) and no buttons.
+   Enable both devices.
 3. Install [Python 3.12](https://www.python.org/downloads/) (check "Add python.exe to PATH" during install) if you haven't already.
 4. Download this repo as a zip, extract it, and double-click `launch.bat` in the extracted folder.
-5. It'll ask you to pick your controller from a list (press Enter for the default) — then moving the sticks/triggers and pressing South/East/West/North/TL/TR should move vJoy's device #1 live. You can check that in Windows' own "Set up USB game controllers" (`joy.cpl`) or in `vJoyConf`'s monitor tab.
+5. It'll ask you to pick your controller from a list (press Enter for the default) — then moving the left stick and pressing South/East/West/North/TL/TR should move vJoy's device #1 live, and pulling either trigger should move device #2's axis. You can check that in Windows' own "Set up USB game controllers" (`joy.cpl`) or in `vJoyConf`'s monitor tab.
 
 Right-stick mouse-look and keyboard-macro combos aren't wired up yet, so those won't do anything. Press Ctrl+C in the console window to stop.
 

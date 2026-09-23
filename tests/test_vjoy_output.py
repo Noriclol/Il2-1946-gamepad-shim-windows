@@ -1,7 +1,13 @@
 import unittest
 
 from res.rudder import RUDDER_CENTRE
-from res.vjoy_output import VJOY_AXIS_RUDDER, VJOY_AXIS_X, VJOY_AXIS_Y, GamepadOutput
+from res.vjoy_output import (
+    VJOY_AXIS_RUDDER,
+    VJOY_AXIS_X,
+    VJOY_AXIS_Y,
+    GamepadOutput,
+    RudderOutput,
+)
 
 
 class _FakeVJoyDevice:
@@ -30,6 +36,15 @@ class TestGamepadOutputAxes(unittest.TestCase):
     def test_set_y_writes_y_axis(self):
         self.output.set_y(6789)
         self.assertEqual(self.device.axis_calls, [(VJOY_AXIS_Y, 6789)])
+
+
+class TestRudderOutput(unittest.TestCase):
+    """RudderOutput wraps a separate vJoy device (#2), kept off the
+    gamepad device -- see res.vjoy_output module docstring for why."""
+
+    def setUp(self):
+        self.device = _FakeVJoyDevice()
+        self.output = RudderOutput(self.device)
 
     def test_set_rudder_writes_rudder_axis(self):
         self.output.set_rudder(RUDDER_CENTRE)

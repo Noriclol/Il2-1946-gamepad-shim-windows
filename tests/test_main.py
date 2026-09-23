@@ -22,12 +22,11 @@ class _FakeJoystick:
 
 
 class _FakeOutput:
-    """Records calls instead of talking to a real vJoy device."""
+    """Records calls instead of talking to a real vJoy gamepad device."""
 
     def __init__(self):
         self.x = None
         self.y = None
-        self.rudder = None
         self.buttons = {}
 
     def set_x(self, value):
@@ -36,11 +35,19 @@ class _FakeOutput:
     def set_y(self, value):
         self.y = value
 
-    def set_rudder(self, value):
-        self.rudder = value
-
     def set_button(self, role, pressed):
         self.buttons[role] = pressed
+
+
+class _FakeRudderOutput:
+    """Records calls instead of talking to a real, separate vJoy rudder
+    device -- see res.vjoy_output for why the rudder is its own device."""
+
+    def __init__(self):
+        self.rudder = None
+
+    def set_rudder(self, value):
+        self.rudder = value
 
 
 class TestAxisToVjoy(unittest.TestCase):
@@ -62,12 +69,13 @@ class TestRun(unittest.TestCase):
         buttons = {index: False for index in PROFILE_DS4.button_map.values()}
         joystick = _FakeJoystick(axes, buttons)
         output = _FakeOutput()
+        rudder_output = _FakeRudderOutput()
 
-        run(joystick, PROFILE_DS4, output)
+        run(joystick, PROFILE_DS4, output, rudder_output)
 
         self.assertEqual(output.x, 16383)
         self.assertEqual(output.y, 16383)
-        self.assertEqual(output.rudder, RUDDER_CENTRE)
+        self.assertEqual(rudder_output.rudder, RUDDER_CENTRE)
         self.assertFalse(any(output.buttons.values()))
 
     def test_pressed_button_forwards_true(self):
@@ -76,8 +84,9 @@ class TestRun(unittest.TestCase):
         buttons[PROFILE_DS4.button_map[SOUTH]] = True
         joystick = _FakeJoystick(axes, buttons)
         output = _FakeOutput()
+        rudder_output = _FakeRudderOutput()
 
-        run(joystick, PROFILE_DS4, output)
+        run(joystick, PROFILE_DS4, output, rudder_output)
 
         self.assertTrue(output.buttons[SOUTH])
 
@@ -86,10 +95,11 @@ class TestRun(unittest.TestCase):
         buttons = {index: False for index in PROFILE_DS4.button_map.values()}
         joystick = _FakeJoystick(axes, buttons)
         output = _FakeOutput()
+        rudder_output = _FakeRudderOutput()
 
-        run(joystick, PROFILE_DS4, output)
+        run(joystick, PROFILE_DS4, output, rudder_output)
 
-        self.assertEqual(output.rudder, 32767)
+        self.assertEqual(rudder_output.rudder, 32767)
 
 
 if __name__ == "__main__":
