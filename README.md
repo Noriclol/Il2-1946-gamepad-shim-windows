@@ -6,7 +6,7 @@ The Linux source project runs the game under Wine/Proton and solves a hard devic
 
 ## Status
 
-Portable logic core (rudder fold, mouse-look math, chorded-combo detection) and I/O-layer groundwork (controller profiles, device scanning, config persistence, vJoy output mapping) are implemented and unit tested. `res/main.py` now wires a minimal DS4-only pipeline — analog stick + trigger passthrough, rudder fold, and the four face buttons + TL/TR — onto a real vJoy device, verified against a real DS4's pygame button indices (see `res/profiles.py`). Not yet built: right-stick mouse-look output and the keyboard-macro output layer (`res/sendinput_output.py` — the VK-code-vs-scancode decision needs testing on real Windows hardware), D-pad-driven combos, and an installer. See `docs/superpowers/plans/` for the implementation plans and `docs/superpowers/plans/2026-08-31-windows-port-roadmap.md` for what's left and why it's sequenced this way.
+Portable logic core (rudder fold, mouse-look math, chorded-combo detection) and I/O-layer groundwork (controller profiles, device scanning, config persistence, vJoy output mapping) are implemented and unit tested. `res/main.py` now wires a minimal DS4-only pipeline — left-stick + trigger passthrough, rudder fold, right-stick mouse-look, and the four face buttons + TL/TR — onto two real vJoy devices and SendInput mouse motion, verified against a real DS4's pygame button indices (see `res/profiles.py`). Not yet built: the keyboard-macro half of `res/sendinput_output.py` (the VK-code-vs-scancode decision needs testing on real Windows hardware), D-pad-driven combos, and an installer. See `docs/superpowers/plans/` for the implementation plans and `docs/superpowers/plans/2026-08-31-windows-port-roadmap.md` for what's left and why it's sequenced this way.
 
 ## For a Windows tester: try the shim itself (DS4 only, for now)
 
@@ -19,9 +19,9 @@ This needs the [vJoy driver](http://vjoystick.sourceforge.net/) installed and **
    Enable both devices.
 3. Install [Python 3.12](https://www.python.org/downloads/) (check "Add python.exe to PATH" during install) if you haven't already.
 4. Download this repo as a zip, extract it, and double-click `launch.bat` in the extracted folder.
-5. It'll ask you to pick your controller from a list (press Enter for the default) — then moving the left stick and pressing South/East/West/North/TL/TR should move vJoy's device #1 live, and pulling either trigger should move device #2's axis. You can check that in Windows' own "Set up USB game controllers" (`joy.cpl`) or in `vJoyConf`'s monitor tab.
+5. It'll ask you to pick your controller from a list (press Enter for the default) — then moving the left stick and pressing South/East/West/North/TL/TR should move vJoy's device #1 live, pulling either trigger should move device #2's axis, and moving the right stick should move the real mouse cursor. You can check the vJoy devices in Windows' own "Set up USB game controllers" (`joy.cpl`) or in `vJoyConf`'s monitor tab.
 
-Right-stick mouse-look and keyboard-macro combos aren't wired up yet, so those won't do anything. Press Ctrl+C in the console window to stop.
+Keyboard-macro combos aren't wired up yet, so those won't do anything. Press Ctrl+C in the console window to stop.
 
 ## For a Windows tester: run the diagnostics
 
@@ -68,14 +68,15 @@ No physical controller, pygame, or vJoy driver is required to run the test suite
 Not everything in a profile carries the same confidence:
 
 - **Axis mappings are treated as known.** The 8BitDo pad's axis order (`X=0, Y=1, LT=2, RX=3, RY=4, RT=5`) is verified against real hardware in the Linux source project's `docs/findings.md`, and pygame wraps the same SDL backend that verification used. The DS4's axis order (`X=0, Y=1, RX=2, RY=3, LT=4, RT=5`) follows the standard SDL GameController convention for DualShock 4 pads — not independently tested by this project, but reliable enough to build on.
-- **Button and hat mappings are not assumed.** SDL/pygame numbers buttons and hats independently of axes, and there's no equivalent standard convention to fall back on the way there is for axes — guessing here risks binding the wrong physical button to a macro. Both profiles ship with an empty `button_map`, `hat_index=None`, and `button_mapping_verified=False` until someone confirms these against real hardware.
+- **`PROFILE_DS4`'s face/shoulder buttons are now verified** against a real DS4 via a Windows diagnostic run (`scripts/windows_diagnostics.py`, 2026-09-23): `SOUTH=0, EAST=1, WEST=2, NORTH=3, TL=9, TR=10`. That same pad reported 0 hats — its D-pad is exposed as extra buttons instead — so `hat_index` stays `None` and D-pad-driven combos aren't wired up yet.
+- **`PROFILE_8BITDO`'s buttons/hat are still unverified.** SDL/pygame numbers buttons and hats independently of axes, with no equivalent standard convention to fall back on the way there is for axes — guessing here risks binding the wrong physical button to a macro. It ships with an empty `button_map`, `hat_index=None`, and `button_mapping_verified=False` until someone confirms these against real 8BitDo hardware.
 
 A profile with `button_mapping_verified=False` can still drive the rudder fold, mouse look, and left-stick passthrough (all axis-only) — only combo macros are blocked on the missing button/hat data.
 
-`find_profile(name)` matches a `pygame.Joystick.get_name()` string against known profiles by case-insensitive substring (`"8bitdo"`, `"wireless controller"`) and returns `None` for anything unrecognized — callers (see `res/device_scan.py`) surface that as a clear "no profile for this controller" message rather than guessing a mapping.
+`find_profile(name)` matches a `pygame.Joystick.get_name()` string against known profiles by case-insensitive substring, checking each profile's `name_match` tuple of aliases (`PROFILE_DS4` matches both `"wireless controller"`, the Bluetooth name, and `"ps4 controller"`, the USB name a real DS4 reported on Windows) and returns `None` for anything unrecognized — callers (see `res/device_scan.py`) surface that as a clear "no profile for this controller" message rather than guessing a mapping.
 
 ### What `tests/test_profiles.py` covers (14 tests)
 
 - **`TestControllerProfileValidation`** — the dataclass itself: a complete `axis_map` (covering all six required roles) constructs fine; a `axis_map` missing any required role raises `ValueError` at construction time, so an incomplete profile can never silently exist; `button_map`/`hat_index`/`button_mapping_verified` all default to their "nothing verified yet" values.
-- **`TestProfile8BitDo`** / **`TestProfileDS4`** — each shipped profile's `axis_map` matches its documented source (the Linux findings table, or the SDL DS4 convention) exactly; each profile's button/hat data is still unverified and empty, confirming the honesty constraint above hasn't quietly regressed; each profile is present in the `PROFILES` registry.
-- **`TestFindProfile`** — case-insensitive substring matching for both profiles' name patterns, a lowercase-name match, an unrelated controller name returning `None`, and an empty string returning `None`.
+- **`TestProfile8BitDo`** / **`TestProfileDS4`** — each shipped profile's `axis_map` matches its documented source (the Linux findings table, or the SDL DS4 convention) exactly; `PROFILE_8BITDO`'s button/hat data is still unverified and empty, confirming the honesty constraint above hasn't quietly regressed; `PROFILE_DS4`'s button data matches the real-hardware-verified values above, with `hat_index` still `None`; each profile is present in the `PROFILES` registry.
+- **`TestFindProfile`** — case-insensitive substring matching for both profiles' name-alias tuples (including `PROFILE_DS4`'s `"ps4 controller"` alias), a lowercase-name match, an unrelated controller name returning `None`, and an empty string returning `None`.

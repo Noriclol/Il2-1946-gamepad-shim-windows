@@ -2,6 +2,7 @@ import unittest
 
 from res.logical_input import SOUTH
 from res.main import axis_to_vjoy, run
+from res.mouse_look import MouseLookState
 from res.profiles import PROFILE_DS4
 from res.rudder import RUDDER_CENTRE
 
@@ -70,13 +71,15 @@ class TestRun(unittest.TestCase):
         joystick = _FakeJoystick(axes, buttons)
         output = _FakeOutput()
         rudder_output = _FakeRudderOutput()
+        mouse_state = MouseLookState()
 
-        run(joystick, PROFILE_DS4, output, rudder_output)
+        run(joystick, PROFILE_DS4, output, rudder_output, mouse_state)
 
         self.assertEqual(output.x, 16383)
         self.assertEqual(output.y, 16383)
         self.assertEqual(rudder_output.rudder, RUDDER_CENTRE)
         self.assertFalse(any(output.buttons.values()))
+        self.assertEqual(mouse_state.get(), (0.0, 0.0))
 
     def test_pressed_button_forwards_true(self):
         axes = {0: 0.0, 1: 0.0, 2: 0.0, 3: 0.0, 4: -1.0, 5: -1.0}
@@ -85,8 +88,9 @@ class TestRun(unittest.TestCase):
         joystick = _FakeJoystick(axes, buttons)
         output = _FakeOutput()
         rudder_output = _FakeRudderOutput()
+        mouse_state = MouseLookState()
 
-        run(joystick, PROFILE_DS4, output, rudder_output)
+        run(joystick, PROFILE_DS4, output, rudder_output, mouse_state)
 
         self.assertTrue(output.buttons[SOUTH])
 
@@ -96,10 +100,26 @@ class TestRun(unittest.TestCase):
         joystick = _FakeJoystick(axes, buttons)
         output = _FakeOutput()
         rudder_output = _FakeRudderOutput()
+        mouse_state = MouseLookState()
 
-        run(joystick, PROFILE_DS4, output, rudder_output)
+        run(joystick, PROFILE_DS4, output, rudder_output, mouse_state)
 
         self.assertEqual(rudder_output.rudder, 32767)
+
+    def test_right_stick_deflection_sets_mouse_velocity(self):
+        # PROFILE_DS4.axis_map: RX=2, RY=3. Full-right, full-down deflection.
+        axes = {0: 0.0, 1: 0.0, 2: 1.0, 3: 1.0, 4: -1.0, 5: -1.0}
+        buttons = {index: False for index in PROFILE_DS4.button_map.values()}
+        joystick = _FakeJoystick(axes, buttons)
+        output = _FakeOutput()
+        rudder_output = _FakeRudderOutput()
+        mouse_state = MouseLookState()
+
+        run(joystick, PROFILE_DS4, output, rudder_output, mouse_state)
+
+        vx, vy = mouse_state.get()
+        self.assertGreater(vx, 0.0)
+        self.assertGreater(vy, 0.0)
 
 
 if __name__ == "__main__":
