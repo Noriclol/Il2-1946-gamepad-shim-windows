@@ -77,6 +77,24 @@ def run(joystick, profile, output, rudder_output):
         output.set_button(role, bool(joystick.get_button(button_index)))
 
 
+def open_vjoy_device(device_id, expected_shape):
+    """Wrap build_vjoy_device with a message a non-technical tester can
+    act on -- the raw pyvjoy exceptions (vJoyNotEnabledException,
+    vJoyFailedToAcquireException, ...) don't say which device failed or
+    what to do about it."""
+    import pyvjoy
+
+    try:
+        return build_vjoy_device(device_id)
+    except pyvjoy.vJoyException as exc:
+        raise pyvjoy.vJoyException(
+            f"Could not open vJoy device #{device_id} ({exc}).\n"
+            f"Open vJoyConf and make sure device #{device_id} exists, is "
+            f"enabled, and is configured with {expected_shape}. See the "
+            f"README's 'try the shim itself' section."
+        ) from exc
+
+
 def main():
     import pygame
 
@@ -100,8 +118,15 @@ def main():
     joystick = pygame.joystick.Joystick(chosen.index)
     joystick.init()
 
-    gamepad_device = build_vjoy_device(GAMEPAD_VJOY_DEVICE_ID)
-    rudder_device = build_vjoy_device(RUDDER_VJOY_DEVICE_ID)
+    import pyvjoy
+
+    try:
+        gamepad_device = open_vjoy_device(GAMEPAD_VJOY_DEVICE_ID, "X, Y axes and at least 6 buttons")
+        rudder_device = open_vjoy_device(RUDDER_VJOY_DEVICE_ID, "a single axis, no buttons")
+    except pyvjoy.vJoyException as exc:
+        print(str(exc))
+        return 1
+
     output = GamepadOutput(gamepad_device, VJOY_BUTTON_MAP)
     rudder_output = RudderOutput(rudder_device)
 
