@@ -12,6 +12,10 @@ Portable logic core (rudder fold, mouse-look math, chorded-combo detection) and 
 
 If you have a Windows machine with the controller(s) plugged in — and ideally IL-2 1946 installed — this project needs a few things checked that can only be verified on real Windows hardware. `scripts/windows_diagnostics.py` walks through all of them and writes everything to `log.txt` at the repo root.
 
+**Easy way (no typing):** install [Python 3.12](https://www.python.org/downloads/) (check "Add python.exe to PATH" during install), download this repo as a zip and extract it, then double-click `run_diagnostics.bat` in the extracted folder. It sets everything up and runs the checks for you.
+
+**Manual way:**
+
 ```bat
 git clone <this repo>
 cd Il2-1946-gamepad-shim-windows
