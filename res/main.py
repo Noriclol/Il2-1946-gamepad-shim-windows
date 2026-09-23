@@ -1,0 +1,107 @@
+"""Entry point: wires the boot-time controller picker, axis passthrough,
+rudder fold, and verified face/shoulder buttons onto a vJoy device.
+
+Deliberately minimal first pass. Right-stick mouse-look and
+keyboard-macro combos are NOT wired here -- res/sendinput_output.py
+doesn't exist yet (see
+docs/superpowers/plans/2026-08-31-windows-port-roadmap.md), and combos
+need D-pad-driven directions that the verified DS4 profile can't supply
+(that pad reports 0 hats, see res/profiles.py). This lets a DS4 drive
+vJoy's X/Y/rudder axes and the four face buttons + TL/TR so a Windows
+tester can confirm the pipeline actually moves a real vJoy device.
+
+Requires vJoy's device #1 already configured via vJoyConf with axes X,
+Y, Rz and at least 6 buttons (res.vjoy_output.VJOY_BUTTON_MAP) -- vJoy
+devices are set up once, ahead of time, not created programmatically.
+
+Not covered by this project's unit tests, same reasoning as
+res.vjoy_output.build_vjoy_device: there's nothing to verify without a
+real controller, a real vJoy driver, and a real event loop running.
+"""
+
+import os
+import sys
+import time
+
+from res.config import load_last_choice, save_last_choice
+from res.device_scan import NoProfileError, choose_controller, enumerate_controllers
+from res.profiles import AXIS_LT, AXIS_RT, AXIS_X, AXIS_Y
+from res.rudder import fold_rudder
+from res.vjoy_output import VJOY_BUTTON_MAP, GamepadOutput, build_vjoy_device
+
+CONFIG_PATH = os.path.join(
+    os.environ.get("APPDATA", "."), "IL2Shim", "config.json"
+)
+
+# Standard SDL joystick axis range.
+STICK_MIN, STICK_MAX = -1.0, 1.0
+TRIGGER_MIN, TRIGGER_MAX = -1.0, 1.0
+
+TICK_HZ = 60.0
+VJOY_AXIS_MAX = 32767
+
+
+def axis_to_vjoy(value, info_min=STICK_MIN, info_max=STICK_MAX):
+    """Map a pygame axis value onto vJoy's 0..VJOY_AXIS_MAX range."""
+    normalized = (value - info_min) / (info_max - info_min)
+    return max(0, min(VJOY_AXIS_MAX, int(normalized * VJOY_AXIS_MAX)))
+
+
+def run(joystick, profile, output):
+    """Read one frame from joystick and push it onto output. Split out
+    from main() so the per-frame logic is unit-testable without pygame
+    or a real vJoy device -- pass any objects with the same shape."""
+    x = joystick.get_axis(profile.axis_map[AXIS_X])
+    y = joystick.get_axis(profile.axis_map[AXIS_Y])
+    lt = joystick.get_axis(profile.axis_map[AXIS_LT])
+    rt = joystick.get_axis(profile.axis_map[AXIS_RT])
+
+    output.set_x(axis_to_vjoy(x))
+    output.set_y(axis_to_vjoy(y))
+    output.set_rudder(
+        fold_rudder(lt, TRIGGER_MIN, TRIGGER_MAX, rt, TRIGGER_MIN, TRIGGER_MAX)
+    )
+
+    for role, button_index in profile.button_map.items():
+        output.set_button(role, bool(joystick.get_button(button_index)))
+
+
+def main():
+    import pygame
+
+    pygame.init()
+    pygame.joystick.init()
+
+    controllers = enumerate_controllers()
+    if not controllers:
+        print("No controllers detected. Plug one in and try again.")
+        return 1
+
+    remembered = load_last_choice(CONFIG_PATH)
+    try:
+        chosen = choose_controller(controllers, remembered_name=remembered)
+    except NoProfileError as exc:
+        print(str(exc))
+        return 1
+
+    save_last_choice(CONFIG_PATH, chosen.name)
+
+    joystick = pygame.joystick.Joystick(chosen.index)
+    joystick.init()
+
+    device = build_vjoy_device()
+    output = GamepadOutput(device, VJOY_BUTTON_MAP)
+
+    print(f"Driving vJoy device #1 from {chosen.name!r}. Press Ctrl+C to stop.")
+    try:
+        while True:
+            pygame.event.pump()
+            run(joystick, chosen.profile, output)
+            time.sleep(1 / TICK_HZ)
+    except KeyboardInterrupt:
+        print("Stopped.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

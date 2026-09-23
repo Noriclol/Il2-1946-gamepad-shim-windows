@@ -86,7 +86,7 @@ def choose_controller(controllers, remembered_name=None, prompt=input, output=pr
 
     chosen = next(c for c in controllers if c.index == chosen_index)
     if chosen.profile is None:
-        supported = ", ".join(p.name_match for p in PROFILES) or "none"
+        supported = ", ".join(alias for p in PROFILES for alias in p.name_match) or "none"
         raise NoProfileError(
             f"No button profile for {chosen.name!r}. Supported controllers: {supported}."
         )

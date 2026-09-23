@@ -20,11 +20,27 @@ It is deliberately not covered by this project's unit tests -- there is
 nothing to verify without a real vJoy driver running.
 """
 
+from res.logical_input import EAST, NORTH, SOUTH, TL, TR, WEST
 from res.rudder import RUDDER_CENTRE
 
 VJOY_AXIS_X = "X"
 VJOY_AXIS_Y = "Y"
 VJOY_AXIS_RUDDER = "RZ"
+
+# vJoy device #1's button shape, decided now that a profile
+# (res.profiles.PROFILE_DS4) has a verified button_map to build it
+# from: one fixed vJoy button number per logical role, shared across
+# every profile, so IL-2's bindings stay the same regardless of which
+# physical pad drives them. Configure vJoyConf's device #1 with at
+# least 6 buttons and axes X, Y, Rz to match.
+VJOY_BUTTON_MAP = {
+    SOUTH: 1,
+    EAST: 2,
+    WEST: 3,
+    NORTH: 4,
+    TL: 5,
+    TR: 6,
+}
 
 
 class GamepadOutput:

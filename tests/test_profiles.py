@@ -1,5 +1,6 @@
 import unittest
 
+from res.logical_input import EAST, NORTH, SOUTH, TL, TR, WEST
 from res.profiles import (
     AXIS_LT,
     AXIS_RT,
@@ -19,19 +20,19 @@ from res.profiles import (
 class TestControllerProfileValidation(unittest.TestCase):
     def test_complete_axis_map_constructs_fine(self):
         profile = ControllerProfile(
-            name_match="test-pad",
+            name_match=("test-pad",),
             axis_map={role: i for i, role in enumerate(REQUIRED_AXIS_ROLES)},
         )
-        self.assertEqual(profile.name_match, "test-pad")
+        self.assertEqual(profile.name_match, ("test-pad",))
 
     def test_missing_axis_role_raises(self):
         incomplete = {AXIS_X: 0, AXIS_Y: 1}
         with self.assertRaises(ValueError):
-            ControllerProfile(name_match="test-pad", axis_map=incomplete)
+            ControllerProfile(name_match=("test-pad",), axis_map=incomplete)
 
     def test_defaults_are_unverified_and_empty(self):
         profile = ControllerProfile(
-            name_match="test-pad",
+            name_match=("test-pad",),
             axis_map={role: i for i, role in enumerate(REQUIRED_AXIS_ROLES)},
         )
         self.assertEqual(profile.button_map, {})
@@ -67,9 +68,16 @@ class TestProfileDS4(unittest.TestCase):
             {AXIS_X: 0, AXIS_Y: 1, AXIS_RX: 2, AXIS_RY: 3, AXIS_LT: 4, AXIS_RT: 5},
         )
 
-    def test_button_mapping_is_not_yet_verified(self):
-        self.assertFalse(PROFILE_DS4.button_mapping_verified)
-        self.assertEqual(PROFILE_DS4.button_map, {})
+    def test_button_mapping_is_verified_from_real_hardware(self):
+        # Verified against a real DS4 via scripts/windows_diagnostics.py
+        # on Windows, 2026-09-23.
+        self.assertTrue(PROFILE_DS4.button_mapping_verified)
+        self.assertEqual(
+            PROFILE_DS4.button_map,
+            {SOUTH: 0, EAST: 1, WEST: 2, NORTH: 3, TL: 9, TR: 10},
+        )
+        # This pad reports 0 hats -- its D-pad is exposed as extra
+        # buttons instead, so hat_index stays unverified/unpopulated.
         self.assertIsNone(PROFILE_DS4.hat_index)
 
     def test_is_registered(self):
@@ -87,8 +95,14 @@ class TestFindProfile(unittest.TestCase):
 
     def test_matches_ds4_by_wireless_controller_name(self):
         # "Wireless Controller" is the common pygame/SDL device name for a
-        # DualShock 4 pad.
+        # DualShock 4 pad connected over Bluetooth.
         found = find_profile("Wireless Controller")
+        self.assertIs(found, PROFILE_DS4)
+
+    def test_matches_ds4_by_ps4_controller_name(self):
+        # "PS4 Controller" is what a real DS4 reported over USB in a
+        # Windows diagnostic run (log.txt, 2026-09-23).
+        found = find_profile("PS4 Controller")
         self.assertIs(found, PROFILE_DS4)
 
     def test_no_match_returns_none(self):

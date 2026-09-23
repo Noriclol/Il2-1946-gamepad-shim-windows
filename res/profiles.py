@@ -25,9 +25,21 @@ reasonable default. See
 docs/superpowers/plans/2026-08-31-windows-port-roadmap.md for what still
 needs testing on real Windows hardware before button_map/hat_index can
 be filled in.
+
+PROFILE_DS4's face buttons and shoulder buttons ARE now verified, from
+a real DS4 diagnostic run (scripts/windows_diagnostics.py) on Windows,
+2026-09-23: SOUTH=0, EAST=1, WEST=2, NORTH=3, TL=9, TR=10. That run's
+pad reported 0 hats -- its D-pad is exposed as extra buttons instead
+(D-pad UP verified as button 15), so hat_index stays None; D-pad-driven
+combos aren't wired up yet as a result. The same run's pygame device
+name was "PS4 Controller" (USB), not "Wireless Controller" (the
+Bluetooth name this project's name_match was written against) -- hence
+name_match now accepts multiple aliases per profile.
 """
 
 from dataclasses import dataclass, field
+
+from res.logical_input import EAST, NORTH, SOUTH, TL, TR, WEST
 
 AXIS_X = "X"
 AXIS_Y = "Y"
@@ -41,9 +53,12 @@ REQUIRED_AXIS_ROLES = (AXIS_X, AXIS_Y, AXIS_LT, AXIS_RT, AXIS_RX, AXIS_RY)
 
 @dataclass(frozen=True)
 class ControllerProfile:
-    """name_match: a lowercase substring matched against pygame's
-    Joystick.get_name(), the same approach the Linux source's
-    scan_for_pad used (MATCH = "8bitdo").
+    """name_match: a tuple of lowercase substrings, any of which matches
+    against pygame's Joystick.get_name() (case-insensitive) -- the same
+    approach the Linux source's scan_for_pad used (MATCH = "8bitdo"),
+    extended to a tuple since the same physical pad can report different
+    names depending on connection type (e.g. a DS4 reports "Wireless
+    Controller" over Bluetooth but "PS4 Controller" over USB).
 
     axis_map: logical axis role -> pygame axis index. Must cover every
     role in REQUIRED_AXIS_ROLES or construction raises ValueError.
@@ -61,7 +76,7 @@ class ControllerProfile:
     run yet.
     """
 
-    name_match: str
+    name_match: tuple
     axis_map: dict
     button_map: dict = field(default_factory=dict)
     hat_index: int | None = None
@@ -76,7 +91,7 @@ class ControllerProfile:
 
 
 PROFILE_8BITDO = ControllerProfile(
-    name_match="8bitdo",
+    name_match=("8bitdo",),
     axis_map={
         AXIS_X: 0,
         AXIS_Y: 1,
@@ -88,7 +103,7 @@ PROFILE_8BITDO = ControllerProfile(
 )
 
 PROFILE_DS4 = ControllerProfile(
-    name_match="wireless controller",
+    name_match=("wireless controller", "ps4 controller"),
     axis_map={
         AXIS_X: 0,
         AXIS_Y: 1,
@@ -97,6 +112,15 @@ PROFILE_DS4 = ControllerProfile(
         AXIS_LT: 4,
         AXIS_RT: 5,
     },
+    button_map={
+        SOUTH: 0,
+        EAST: 1,
+        WEST: 2,
+        NORTH: 3,
+        TL: 9,
+        TR: 10,
+    },
+    button_mapping_verified=True,
 )
 
 PROFILES = (PROFILE_8BITDO, PROFILE_DS4)
@@ -110,6 +134,6 @@ def find_profile(controller_name):
     controller" message, they don't guess (see res.device_scan)."""
     lowered = controller_name.lower()
     for profile in PROFILES:
-        if profile.name_match in lowered:
+        if any(alias in lowered for alias in profile.name_match):
             return profile
     return None

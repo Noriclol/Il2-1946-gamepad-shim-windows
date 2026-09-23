@@ -6,7 +6,19 @@ The Linux source project runs the game under Wine/Proton and solves a hard devic
 
 ## Status
 
-Portable logic core (rudder fold, mouse-look math, chorded-combo detection) and I/O-layer groundwork (controller profiles, device scanning, config persistence, vJoy output mapping) are implemented and unit tested. Not yet built: the keyboard-macro output layer (`res/sendinput_output.py` — the VK-code-vs-scancode decision needs testing on real Windows hardware), the `res/main.py` event-loop wiring, and an installer. See `docs/superpowers/plans/` for the implementation plans and `docs/superpowers/plans/2026-08-31-windows-port-roadmap.md` for what's left and why it's sequenced this way.
+Portable logic core (rudder fold, mouse-look math, chorded-combo detection) and I/O-layer groundwork (controller profiles, device scanning, config persistence, vJoy output mapping) are implemented and unit tested. `res/main.py` now wires a minimal DS4-only pipeline — analog stick + trigger passthrough, rudder fold, and the four face buttons + TL/TR — onto a real vJoy device, verified against a real DS4's pygame button indices (see `res/profiles.py`). Not yet built: right-stick mouse-look output and the keyboard-macro output layer (`res/sendinput_output.py` — the VK-code-vs-scancode decision needs testing on real Windows hardware), D-pad-driven combos, and an installer. See `docs/superpowers/plans/` for the implementation plans and `docs/superpowers/plans/2026-08-31-windows-port-roadmap.md` for what's left and why it's sequenced this way.
+
+## For a Windows tester: try the shim itself (DS4 only, for now)
+
+This needs the [vJoy driver](http://vjoystick.sourceforge.net/) installed and its device #1 configured **before** running the shim, one time only:
+
+1. Install the vJoy driver from the link above (it's a community-signed driver — if Windows refuses it, you may need to enable test-signing mode; see the roadmap doc).
+2. Run `vJoyConf` (installed alongside the driver) and configure **device #1** with axes **X, Y, Rz** and at least **6 buttons**. Leave everything else default. Click Apply/enable the device.
+3. Install [Python 3.12](https://www.python.org/downloads/) (check "Add python.exe to PATH" during install) if you haven't already.
+4. Download this repo as a zip, extract it, and double-click `launch.bat` in the extracted folder.
+5. It'll ask you to pick your controller from a list (press Enter for the default) — then moving the sticks/triggers and pressing South/East/West/North/TL/TR should move vJoy's device #1 live. You can check that in Windows' own "Set up USB game controllers" (`joy.cpl`) or in `vJoyConf`'s monitor tab.
+
+Right-stick mouse-look and keyboard-macro combos aren't wired up yet, so those won't do anything. Press Ctrl+C in the console window to stop.
 
 ## For a Windows tester: run the diagnostics
 
