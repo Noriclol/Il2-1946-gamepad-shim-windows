@@ -2,7 +2,7 @@ import unittest
 
 from res.mouse_look import (
     RelAccumulator,
-    apply_expo,
+    aiming_curve,
     flatten_deadzone,
     normalize,
     stick_to_velocity,
@@ -33,15 +33,32 @@ class TestFlattenDeadzone(unittest.TestCase):
         self.assertAlmostEqual(neg, -pos)
 
 
-class TestApplyExpo(unittest.TestCase):
-    def test_zero_expo_is_linear(self):
-        self.assertEqual(apply_expo(0.5, expo=0.0), 0.5)
+class TestAimingCurve(unittest.TestCase):
+    def test_zero_is_zero(self):
+        self.assertEqual(aiming_curve(0.0), 0.0)
 
-    def test_full_expo_is_cubic(self):
-        self.assertAlmostEqual(apply_expo(0.5, expo=1.0), 0.125)
+    def test_endpoints_are_full_scale(self):
+        self.assertAlmostEqual(aiming_curve(1.0), 1.0, places=6)
+        self.assertAlmostEqual(aiming_curve(-1.0), -1.0, places=6)
 
-    def test_zero_input_is_zero(self):
-        self.assertEqual(apply_expo(0.0, expo=0.5), 0.0)
+    def test_negative_side_mirrors_positive(self):
+        self.assertAlmostEqual(aiming_curve(0.37), -aiming_curve(-0.37))
+
+    def test_half_stick_stays_gentle(self):
+        # Fine-control zone: well under half output at 50% deflection.
+        self.assertLess(aiming_curve(0.5), 0.3)
+
+    def test_past_centre_is_near_half_output(self):
+        # centre defaults to 0.6 -- that's the midpoint of the ramp.
+        self.assertAlmostEqual(aiming_curve(0.6), 0.5, delta=0.02)
+
+    def test_monotonically_increasing(self):
+        xs = [i / 100 for i in range(-100, 101)]
+        ys = [aiming_curve(x) for x in xs]
+        self.assertEqual(ys, sorted(ys))
+
+    def test_custom_centre_and_steepness_still_end_at_one(self):
+        self.assertAlmostEqual(aiming_curve(1.0, centre=0.3, steepness=6.0), 1.0, places=6)
 
 
 class TestStickToVelocity(unittest.TestCase):

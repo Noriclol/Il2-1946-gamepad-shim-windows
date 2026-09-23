@@ -2,6 +2,7 @@ import unittest
 
 from res.rudder import RUDDER_CENTRE
 from res.vjoy_output import (
+    GENERIC_BUTTON_OFFSET,
     VJOY_AXIS_RUDDER,
     VJOY_AXIS_X,
     VJOY_AXIS_Y,
@@ -73,6 +74,20 @@ class TestGamepadOutputButtons(unittest.TestCase):
         output = GamepadOutput(device, button_index_map={"SOUTH": 1})
         output.set_button("SOUTH", False)
         self.assertEqual(device.button_calls, [(1, False)])
+
+
+class TestGamepadOutputRawButtons(unittest.TestCase):
+    def test_raw_button_writes_at_pygame_index_plus_offset(self):
+        device = _FakeVJoyDevice()
+        output = GamepadOutput(device, button_index_map={})
+        output.set_raw_button(11, True)
+        self.assertEqual(device.button_calls, [(11 + GENERIC_BUTTON_OFFSET, True)])
+
+    def test_raw_button_release_forwards_false(self):
+        device = _FakeVJoyDevice()
+        output = GamepadOutput(device, button_index_map={})
+        output.set_raw_button(11, False)
+        self.assertEqual(device.button_calls, [(11 + GENERIC_BUTTON_OFFSET, False)])
 
 
 if __name__ == "__main__":

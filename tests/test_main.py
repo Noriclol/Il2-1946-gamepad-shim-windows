@@ -3,9 +3,9 @@ import unittest
 from res.combo_detector import ComboDetector, Fire, GAMEPAD, KEYBOARD
 from res.combos import NORTH, TABLE_1, TABLE_2, TABLE_3, TL, TR, UP, WEST
 from res.logical_input import SOUTH
-from res.main import EdgeTracker, axis_to_vjoy, run
+from res.main import EdgeTracker, axis_to_vjoy, combo_gating_message, run
 from res.mouse_look import MouseLookState
-from res.profiles import PROFILE_DS4
+from res.profiles import PROFILE_8BITDO, PROFILE_DS4
 from res.rudder import RUDDER_CENTRE
 
 
@@ -21,7 +21,10 @@ class _FakeJoystick:
         return self._axes[index]
 
     def get_button(self, index):
-        return self._buttons[index]
+        return self._buttons.get(index, False)
+
+    def get_numbuttons(self):
+        return max(self._buttons, default=-1) + 1
 
 
 class _FakeOutput:
@@ -31,6 +34,7 @@ class _FakeOutput:
         self.x = None
         self.y = None
         self.buttons = {}
+        self.raw_buttons = {}
 
     def set_x(self, value):
         self.x = value
@@ -40,6 +44,9 @@ class _FakeOutput:
 
     def set_button(self, role, pressed):
         self.buttons[role] = pressed
+
+    def set_raw_button(self, pygame_index, pressed):
+        self.raw_buttons[pygame_index] = pressed
 
 
 class _FakeRudderOutput:
@@ -205,6 +212,53 @@ class TestComboIntegration(unittest.TestCase):
         self._run()
         self.assertEqual(self.fires, [])
         self.assertTrue(self.output.buttons[TL])
+
+
+class TestGenericButtonPassthrough(unittest.TestCase):
+    def setUp(self):
+        self.axes = {0: 0.0, 1: 0.0, 2: 0.0, 3: 0.0, 4: -1.0, 5: -1.0}
+        # 19 buttons: PROFILE_DS4's named roles (0,1,2,3,9,10) and D-pad
+        # (15-18), plus unmapped indices in between and after (e.g. 11 =
+        # DS4's L3 in real life) that no role covers.
+        self.buttons = {index: False for index in range(19)}
+        self.output = _FakeOutput()
+        self.rudder_output = _FakeRudderOutput()
+        self.mouse_state = MouseLookState()
+
+    def _run(self):
+        joystick = _FakeJoystick(self.axes, self.buttons)
+        run(joystick, PROFILE_DS4, self.output, self.rudder_output, self.mouse_state)
+
+    def test_unmapped_button_forwards_raw_at_offset(self):
+        self.buttons[11] = True
+        self._run()
+        self.assertTrue(self.output.raw_buttons[11])
+
+    def test_unmapped_button_release_forwards_false(self):
+        self.buttons[11] = True
+        self._run()
+        self.buttons[11] = False
+        self._run()
+        self.assertFalse(self.output.raw_buttons[11])
+
+    def test_named_role_index_is_not_also_raw_forwarded(self):
+        self._run()
+        self.assertNotIn(PROFILE_DS4.button_map[SOUTH], self.output.raw_buttons)
+
+    def test_dpad_index_is_not_also_raw_forwarded(self):
+        self._run()
+        self.assertNotIn(PROFILE_DS4.dpad_button_map[UP], self.output.raw_buttons)
+
+
+class TestComboGatingMessage(unittest.TestCase):
+    def test_verified_profile_returns_none(self):
+        self.assertIsNone(combo_gating_message(PROFILE_DS4, "PS4 Controller"))
+
+    def test_unverified_profile_names_controller_and_next_step(self):
+        message = combo_gating_message(PROFILE_8BITDO, "8BitDo SN30 Pro")
+        self.assertIn("Combo macros disabled", message)
+        self.assertIn("8BitDo SN30 Pro", message)
+        self.assertIn("scripts/windows_diagnostics.py", message)
 
 
 if __name__ == "__main__":

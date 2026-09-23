@@ -1,6 +1,8 @@
 """Entry point: wires the boot-time controller picker, axis passthrough,
-rudder fold, right-stick mouse-look, and verified face/shoulder buttons
-onto two vJoy devices (a gamepad (#1) and a separate rudder-only device
+rudder fold, right-stick mouse-look, verified face/shoulder buttons, and
+every other button the pad has (forwarded raw, unverified, see
+res.vjoy_output.GENERIC_BUTTON_OFFSET) onto two vJoy devices (a gamepad
+(#1) and a separate rudder-only device
 (#2), see res.vjoy_output for why the rudder is split off) plus SendInput
 mouse motion (res.sendinput_output -- no virtual mouse device, see that
 module's docstring for why).
@@ -21,9 +23,10 @@ a Windows tester can confirm the pipeline actually moves real vJoy
 devices, the mouse cursor, and fires keyboard macros.
 
 Requires vJoy already configured via vJoyConf, one time, ahead of
-running this: device #1 with axes X, Y and at least 6 buttons
-(res.vjoy_output.VJOY_BUTTON_MAP); device #2 with a single axis and no
-buttons.
+running this: device #1 with axes X, Y and at least 32 buttons
+(res.vjoy_output.VJOY_BUTTON_MAP's named roles plus headroom for
+res.vjoy_output.GENERIC_BUTTON_OFFSET's raw-forwarded ones); device #2
+with a single axis and no buttons.
 
 Not covered by this project's unit tests, same reasoning as
 res.vjoy_output.build_vjoy_device: there's nothing to verify without a
@@ -37,7 +40,12 @@ import time
 
 from res.combo_detector import GAMEPAD, KEYBOARD, ComboDetector
 from res.config import load_last_choice, save_last_choice
-from res.device_scan import NoProfileError, choose_controller, enumerate_controllers
+from res.device_scan import (
+    NoProfileError,
+    choose_controller,
+    enumerate_controllers,
+    wait_for_reconnect,
+)
 from res.logical_input import FACE_BUTTONS, TL, TR
 from res.mouse_look import MouseLookState, stick_to_velocity
 from res.profiles import AXIS_LT, AXIS_RT, AXIS_RX, AXIS_RY, AXIS_X, AXIS_Y
@@ -179,6 +187,36 @@ def run(
                 for fire in combo_detector.on_dpad_direction(direction, pressed):
                     dispatch_fire(fire, output)
 
+    # Every other button the pad has -- L3/R3, Share, Options, PS,
+    # touchpad click, whatever else exists -- still reaches vJoy, raw,
+    # even with no named role or hardware verification. Mirrors the
+    # Linux source project's catch-all forward_key for any evdev
+    # EV_KEY it doesn't specially handle above. button_map's roles and
+    # dpad_button_map's directions are excluded here since they're
+    # already handled (forwarded by role, or combo-only) above.
+    handled_indices = set(profile.button_map.values()) | set(profile.dpad_button_map.values())
+    for index in range(joystick.get_numbuttons()):
+        if index in handled_indices:
+            continue
+        output.set_raw_button(index, bool(joystick.get_button(index)))
+
+
+def combo_gating_message(profile, controller_name):
+    """Pure decision for whether profile can drive combo_detector: None if
+    profile.button_mapping_verified (combos run normally), otherwise a
+    tester-facing string explaining why they're off. Split out from
+    main() so this branch is unit-testable without pygame/vJoy, mirroring
+    the Linux source project's startup capability check -- Windows had no
+    equivalent, so an unverified profile like PROFILE_8BITDO used to
+    silently send no buttons/combos with no explanation."""
+    if profile.button_mapping_verified:
+        return None
+    return (
+        f"Combo macros disabled: {controller_name!r} profile has no "
+        f"verified button map yet. Run scripts/windows_diagnostics.py on "
+        f"real hardware and report back to get button_map filled in."
+    )
+
 
 def open_vjoy_device(device_id, expected_shape):
     """Wrap build_vjoy_device with a message a non-technical tester can
@@ -224,7 +262,7 @@ def main():
     import pyvjoy
 
     try:
-        gamepad_device = open_vjoy_device(GAMEPAD_VJOY_DEVICE_ID, "X, Y axes and at least 6 buttons")
+        gamepad_device = open_vjoy_device(GAMEPAD_VJOY_DEVICE_ID, "X, Y axes and at least 32 buttons")
         rudder_device = open_vjoy_device(RUDDER_VJOY_DEVICE_ID, "a single axis, no buttons")
     except pyvjoy.vJoyException as exc:
         print(str(exc))
@@ -240,25 +278,59 @@ def main():
     )
     mouse_thread.start()
 
-    combo_detector = ComboDetector()
-    edge_tracker = EdgeTracker()
-
-    print(
-        f"Driving vJoy devices #1/#2, mouse-look, and chorded macros from "
-        f"{chosen.name!r}. Press Ctrl+C to stop."
-    )
+    gating_message = combo_gating_message(chosen.profile, chosen.name)
+    if gating_message is None:
+        combo_detector = ComboDetector()
+        edge_tracker = EdgeTracker()
+        print(
+            f"Driving vJoy devices #1/#2, mouse-look, and chorded macros "
+            f"from {chosen.name!r}. Press Ctrl+C to stop."
+        )
+    else:
+        combo_detector = None
+        edge_tracker = None
+        print(gating_message)
+        print(
+            f"Driving vJoy devices #1/#2 and mouse-look from {chosen.name!r} "
+            f"(combo macros off -- see above). Press Ctrl+C to stop."
+        )
     try:
         while True:
-            pygame.event.pump()
-            run(
-                joystick,
-                chosen.profile,
-                output,
-                rudder_output,
-                mouse_state,
-                combo_detector=combo_detector,
-                edge_tracker=edge_tracker,
-            )
+            try:
+                pygame.event.pump()
+                run(
+                    joystick,
+                    chosen.profile,
+                    output,
+                    rudder_output,
+                    mouse_state,
+                    combo_detector=combo_detector,
+                    edge_tracker=edge_tracker,
+                )
+            except pygame.error as exc:
+                print(
+                    f"\ncontroller disappeared ({exc}); centering controls, "
+                    f"waiting for reconnect"
+                )
+
+                for role in chosen.profile.button_map:
+                    output.set_button(role, False)
+                rudder_output.centre_rudder()
+                mouse_state.set(vx=0.0, vy=0.0)
+                if gating_message is None:
+                    combo_detector = ComboDetector()
+                    edge_tracker = EdgeTracker()
+
+                try:
+                    joystick.quit()
+                except pygame.error:
+                    pass
+
+                found = wait_for_reconnect(chosen.name)
+                joystick = pygame.joystick.Joystick(found.index)
+                joystick.init()
+                print(f"reconnected: {found.name}")
+
             time.sleep(1 / TICK_HZ)
     except KeyboardInterrupt:
         print("Stopped.")

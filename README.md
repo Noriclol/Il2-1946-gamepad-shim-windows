@@ -14,7 +14,7 @@ This needs the [vJoy driver](http://vjoystick.sourceforge.net/) installed and **
 
 1. Install the vJoy driver from the link above (it's a community-signed driver — if Windows refuses it, you may need to enable test-signing mode; see the roadmap doc).
 2. Run `vJoyConf` (installed alongside the driver) and configure:
-   - **Device #1**: axes **X, Y** and at least **6 buttons**. Leave everything else default.
+   - **Device #1**: axes **X, Y** and at least **32 buttons** (6 for South/East/West/North/TL/TR, the rest so every other button the pad has — L3/R3, Share, Options, PS, touchpad click, etc. — still reaches vJoy raw, even without a named role). Leave everything else default.
    - **Device #2**: a single axis (any one, e.g. X) and no buttons.
    Enable both devices.
 3. Install [Python 3.12](https://www.python.org/downloads/) (check "Add python.exe to PATH" during install) if you haven't already.

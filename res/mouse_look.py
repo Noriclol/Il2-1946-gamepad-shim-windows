@@ -15,9 +15,18 @@ import threading
 
 DEFAULT_DEADZONE = 0.1
 DEFAULT_GAIN = 1.0
-DEFAULT_EXPO = 0.0
 REL_XY_SCALING = 60.0
 DEFAULT_RATE_HZ = 60.0
+
+# aiming_curve's shape: CENTRE is the stick position (post-deadzone, 0..1)
+# where the ramp's midpoint sits -- output there is roughly half of full
+# scale. STEEPNESS controls how sharp that ramp is; higher pinches the
+# fine-control zone below CENTRE flatter and the ramp above it steeper.
+# Picked to solve final-approach aiming: fine, forgiving control through
+# the first ~half of stick travel, then a real, smooth turn-in for lining
+# up a target in the outer half.
+DEFAULT_CURVE_CENTRE = 0.6
+DEFAULT_CURVE_STEEPNESS = 12.0
 
 
 def normalize(value, info_min, info_max):
@@ -37,22 +46,30 @@ def flatten_deadzone(x, deadzone):
     return (x - deadzone * sign) / (1.0 - deadzone)
 
 
-def apply_expo(x, expo):
-    """Cubic expo curve: expo=0 linear, expo=1 fully cubic (soft centre)."""
-    if expo == 0 or x == 0:
-        return x
-    d = 1.0 - expo
-    return d * x + (1.0 - d) * x**3
+def aiming_curve(x, centre=DEFAULT_CURVE_CENTRE, steepness=DEFAULT_CURVE_STEEPNESS):
+    """Normalized-logistic response curve: flat and forgiving below
+    `centre`, then a smooth (no seam) ramp ending exactly at 1.0 for a
+    full-scale x. `centre` is where the ramp's midpoint sits; `steepness`
+    controls how sharp the transition is."""
+    if x == 0:
+        return 0.0
+    sign = 1.0 if x > 0 else -1.0
+    a = abs(x)
+    lo = 1.0 / (1.0 + math.exp(-steepness * (0.0 - centre)))
+    hi = 1.0 / (1.0 + math.exp(-steepness * (1.0 - centre)))
+    y = (1.0 / (1.0 + math.exp(-steepness * (a - centre))) - lo) / (hi - lo)
+    return sign * y
 
 
 def stick_to_velocity(
     value, info_min, info_max,
-    deadzone=DEFAULT_DEADZONE, gain=DEFAULT_GAIN, expo=DEFAULT_EXPO,
+    deadzone=DEFAULT_DEADZONE, gain=DEFAULT_GAIN,
+    centre=DEFAULT_CURVE_CENTRE, steepness=DEFAULT_CURVE_STEEPNESS,
 ):
     """Return a -1..1 velocity for the current stick position."""
     x = normalize(value, info_min, info_max)
     x = flatten_deadzone(x, deadzone)
-    x = apply_expo(x, expo)
+    x = aiming_curve(x, centre, steepness)
     return x * gain
 
 

@@ -51,9 +51,7 @@ RUDDER_VJOY_DEVICE_ID = 2
 # (res.profiles.PROFILE_DS4) has a verified button_map to build it
 # from: one fixed vJoy button number per logical role, shared across
 # every profile, so IL-2's bindings stay the same regardless of which
-# physical pad drives them. Configure vJoyConf's device #1 with axes
-# X, Y and at least 6 buttons; device #2 with a single axis and no
-# buttons, to match.
+# physical pad drives them.
 VJOY_BUTTON_MAP = {
     SOUTH: 1,
     EAST: 2,
@@ -62,6 +60,18 @@ VJOY_BUTTON_MAP = {
     TL: 5,
     TR: 6,
 }
+
+# Any pygame button index a profile doesn't give a named role (L3/R3,
+# Share, Options, PS, touchpad click, whatever else a pad has) still
+# reaches vJoy: res.main.run forwards it raw at pygame_index +
+# GENERIC_BUTTON_OFFSET, mirroring the Linux source project's catch-all
+# forward_key for any evdev EV_KEY it doesn't specially handle. Offset
+# chosen to sit well clear of VJOY_BUTTON_MAP's 1-6, with room for that
+# map to grow. Configure vJoyConf's device #1 with axes X, Y and at
+# least 32 buttons (covers named roles plus every generically-forwarded
+# index seen so far, with margin for pads with more buttons); device #2
+# with a single axis and no buttons, to match.
+GENERIC_BUTTON_OFFSET = 10
 
 
 class GamepadOutput:
@@ -90,6 +100,13 @@ class GamepadOutput:
         if button_id is None:
             return
         self._device.set_button(button_id, pressed)
+
+    def set_raw_button(self, pygame_index, pressed):
+        """Forward a pygame button index with no named role straight to
+        vJoy at pygame_index + GENERIC_BUTTON_OFFSET -- see that
+        constant's comment for why. Unlike set_button, there is no
+        no-op case: every index this is called with reaches vJoy."""
+        self._device.set_button(pygame_index + GENERIC_BUTTON_OFFSET, pressed)
 
 
 class RudderOutput:

@@ -91,3 +91,34 @@ def choose_controller(controllers, remembered_name=None, prompt=input, output=pr
             f"No button profile for {chosen.name!r}. Supported controllers: {supported}."
         )
     return chosen
+
+
+def wait_for_reconnect(name, poll_interval=0.5, enumerate=enumerate_controllers, sleep=None, pump=None):
+    """Poll forever for a controller named `name` to reappear, e.g. after
+    the active pad is unplugged mid-session. Requires the exact same name
+    as before (indices aren't stable across reconnects -- see
+    DetectedController's docstring), matching the Linux source project's
+    scan_for_pad(timeout=None) reconnect behaviour.
+
+    enumerate/sleep/pump are injected for testability, same pattern as
+    choose_controller's prompt/output -- pump defaults to pygame.event.pump
+    (lazily imported, real pygame's hotplug detection needs the event
+    queue pumped before a fresh enumerate_controllers() call will see a
+    newly-plugged-in device), sleep defaults to time.sleep.
+    """
+    if sleep is None:
+        import time
+
+        sleep = time.sleep
+    if pump is None:
+        def pump():
+            import pygame
+
+            pygame.event.pump()
+
+    while True:
+        pump()
+        for controller in enumerate():
+            if controller.name == name:
+                return controller
+        sleep(poll_interval)

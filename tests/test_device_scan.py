@@ -3,7 +3,13 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from res.device_scan import DetectedController, NoProfileError, choose_controller, enumerate_controllers
+from res.device_scan import (
+    DetectedController,
+    NoProfileError,
+    choose_controller,
+    enumerate_controllers,
+    wait_for_reconnect,
+)
 from res.profiles import PROFILE_8BITDO, PROFILE_DS4
 
 
@@ -114,6 +120,50 @@ class TestEnumerateControllers(unittest.TestCase):
             controllers = enumerate_controllers()
 
         self.assertEqual(controllers, [])
+
+
+class TestWaitForReconnect(unittest.TestCase):
+    def test_polls_until_matching_name_reappears(self):
+        other = DetectedController(index=0, name="Logitech Gamepad F310", profile=None)
+        target = DetectedController(index=1, name="8BitDo Ultimate Wireless / Pro 2 Wired Controller", profile=PROFILE_8BITDO)
+        snapshots = iter([[], [other], [other, target]])
+        sleeps = []
+
+        found = wait_for_reconnect(
+            "8BitDo Ultimate Wireless / Pro 2 Wired Controller",
+            poll_interval=0.5,
+            enumerate=lambda: next(snapshots),
+            sleep=sleeps.append,
+            pump=lambda: None,
+        )
+
+        self.assertIs(found, target)
+        self.assertEqual(sleeps, [0.5, 0.5])
+
+    def test_returns_immediately_when_already_present(self):
+        target = DetectedController(index=0, name="Wireless Controller", profile=PROFILE_DS4)
+
+        found = wait_for_reconnect(
+            "Wireless Controller",
+            enumerate=lambda: [target],
+            sleep=lambda _s: self.fail("should not sleep"),
+            pump=lambda: None,
+        )
+
+        self.assertIs(found, target)
+
+    def test_calls_pump_before_each_enumeration(self):
+        pumps = []
+        snapshots = iter([[], [DetectedController(index=0, name="X", profile=None)]])
+
+        wait_for_reconnect(
+            "X",
+            enumerate=lambda: next(snapshots),
+            sleep=lambda _s: None,
+            pump=lambda: pumps.append(None),
+        )
+
+        self.assertEqual(len(pumps), 2)
 
 
 if __name__ == "__main__":
