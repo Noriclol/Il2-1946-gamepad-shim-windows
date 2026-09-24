@@ -181,7 +181,17 @@ def run(
                 dispatch_fire(fire, output)
 
     if combo_detector is not None:
+        numbuttons = joystick.get_numbuttons()
         for direction, button_index in profile.dpad_button_map.items():
+            # dpad_button_map's DOWN/LEFT/RIGHT are an unverified guessed
+            # continuation past UP (see res/profiles.py) -- on real
+            # hardware with fewer buttons than guessed, get_button()
+            # would raise pygame.error("Invalid joystick button") every
+            # frame, which main()'s reconnect handling misreads as a
+            # real disconnect and loops on forever. Skip out-of-range
+            # guesses instead of crashing on them.
+            if button_index >= numbuttons:
+                continue
             pressed = bool(joystick.get_button(button_index))
             if edge_tracker.changed(direction, pressed):
                 for fire in combo_detector.on_dpad_direction(direction, pressed):

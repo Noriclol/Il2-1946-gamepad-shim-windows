@@ -106,13 +106,16 @@ def section_pygame(log):
         log.write(f"Hats: {joystick.get_numhats()}")
 
         log.write("")
-        log.write("Sampling raw axis values for 3 seconds -- move both sticks")
-        log.write("and pull both triggers now to see their live ranges:")
-        _sample_axes(log, pygame, joystick, seconds=3)
+        log.write("Sampling raw axis values for 10 seconds -- slowly move both")
+        log.write("sticks to their full range, and slowly pull each trigger all")
+        log.write("the way in and let it back out. Triggers especially need a")
+        log.write("slow, deliberate full pull -- a quick tap can miss their real")
+        log.write("min/max. Take your time, the window is long on purpose:")
+        _sample_axes(log, pygame, joystick, seconds=10)
 
         log.write("")
         log.write("Now the guided button/hat capture. Each prompt below waits up")
-        log.write("to 6 seconds for you to press the named control -- take your")
+        log.write("to 12 seconds for you to press the named control -- take your")
         log.write("time, there's no rush between prompts.")
         _capture_button(log, pygame, joystick, "SOUTH (bottom face button, e.g. A / Cross)")
         _capture_button(log, pygame, joystick, "EAST (right face button, e.g. B / Circle)")
@@ -120,7 +123,10 @@ def section_pygame(log):
         _capture_button(log, pygame, joystick, "NORTH (top face button, e.g. Y / Triangle)")
         _capture_button(log, pygame, joystick, "TL (left shoulder/bumper)")
         _capture_button(log, pygame, joystick, "TR (right shoulder/bumper)")
-        _capture_dpad_up(log, pygame, joystick)
+        _capture_dpad_direction(log, pygame, joystick, "UP", hat_value=(0, 1))
+        _capture_dpad_direction(log, pygame, joystick, "DOWN", hat_value=(0, -1))
+        _capture_dpad_direction(log, pygame, joystick, "LEFT", hat_value=(-1, 0))
+        _capture_dpad_direction(log, pygame, joystick, "RIGHT", hat_value=(1, 0))
 
     pygame.joystick.quit()
     pygame.quit()
@@ -141,7 +147,7 @@ def _sample_axes(log, pygame, joystick, seconds):
         log.write(f"  axis[{axis}]: observed range {seen_min[axis]:.3f} .. {seen_max[axis]:.3f}")
 
 
-def _capture_button(log, pygame, joystick, label, timeout=6):
+def _capture_button(log, pygame, joystick, label, timeout=12):
     log.write("")
     log.write(f"Press and hold the {label} button now ({timeout}s window)...")
     deadline = time.monotonic() + timeout
@@ -163,28 +169,42 @@ def _capture_button(log, pygame, joystick, label, timeout=6):
         time.sleep(0.02)
 
 
-def _capture_dpad_up(log, pygame, joystick, timeout=6):
+def _capture_dpad_direction(log, pygame, joystick, direction_label, hat_value, timeout=12):
+    """Capture one D-pad direction, either as a hat (matched against the
+    expected (x, y) hat_value -- SDL convention: y=1 up/y=-1 down,
+    x=1 right/x=-1 left) or, on a pad with 0 hats, as a plain button
+    (the same fallback res.profiles.py's dpad_button_map assumes for
+    the DS4). Called once per direction (UP/DOWN/LEFT/RIGHT) so every
+    one gets hardware-verified, not just UP -- see
+    res/profiles.py's dpad_mapping_verified=False for why that mattered:
+    res/main.py used to crash-loop on guessed DOWN/LEFT/RIGHT indices
+    that didn't exist on real hardware."""
     log.write("")
     if joystick.get_numhats() > 0:
-        log.write(f"Push the D-pad UP now ({timeout}s window)...")
+        log.write(f"Push the D-pad {direction_label} now ({timeout}s window)...")
         deadline = time.monotonic() + timeout
         found = None
         while time.monotonic() < deadline and found is None:
             pygame.event.pump()
             for h in range(joystick.get_numhats()):
                 value = joystick.get_hat(h)
-                if value != (0, 0):
+                if value == hat_value:
                     found = (h, value)
                     break
             time.sleep(0.02)
         if found is None:
-            log.write("  -> no hat movement detected (timed out)")
+            log.write(f"  -> no hat movement detected for {direction_label} (timed out)")
         else:
-            log.write(f"  -> D-pad reports as hat index {found[0]}, UP = {found[1]}")
+            log.write(f"  -> D-pad reports as hat index {found[0]}, {direction_label} = {found[1]}")
+            # Wait for release so the next direction's capture doesn't
+            # immediately re-trigger on a still-held hat.
+            while joystick.get_hat(found[0]) == hat_value:
+                pygame.event.pump()
+                time.sleep(0.02)
         return
 
     log.write("This controller reports 0 hats -- its D-pad is likely exposed as")
-    log.write("extra buttons instead. Checking buttons for D-pad UP...")
+    log.write(f"extra buttons instead. Checking buttons for D-pad {direction_label}...")
     deadline = time.monotonic() + timeout
     found = None
     while time.monotonic() < deadline and found is None:
@@ -195,9 +215,12 @@ def _capture_dpad_up(log, pygame, joystick, timeout=6):
                 break
         time.sleep(0.02)
     if found is None:
-        log.write("  -> no button press detected for D-pad UP (timed out)")
-    else:
-        log.write(f"  -> D-pad UP = button index {found}")
+        log.write(f"  -> no button press detected for D-pad {direction_label} (timed out)")
+        return
+    log.write(f"  -> D-pad {direction_label} = button index {found}")
+    while joystick.get_button(found):
+        pygame.event.pump()
+        time.sleep(0.02)
 
 
 def section_vjoy(log):

@@ -213,6 +213,44 @@ class TestComboIntegration(unittest.TestCase):
         self.assertEqual(self.fires, [])
         self.assertTrue(self.output.buttons[TL])
 
+    def test_dpad_index_beyond_real_pad_button_count_is_skipped_not_raised(self):
+        # Regression: dpad_button_map's DOWN/LEFT/RIGHT (16/17/18) are an
+        # unverified guessed continuation past UP=15 (see
+        # res/profiles.py). A real pad with fewer buttons than guessed
+        # must not raise -- run() should just skip the out-of-range
+        # guesses instead of crashing every frame (which main() used to
+        # misread as a real disconnect and loop on forever).
+
+        class _SixteenButtonJoystick(_FakeJoystick):
+            """Like a real pygame Joystick: get_button() raises for any
+            index >= get_numbuttons(), it doesn't silently return
+            False."""
+
+            def get_button(self, index):
+                if index >= self.get_numbuttons():
+                    raise IndexError("Invalid joystick button")
+                return super().get_button(index)
+
+            def get_numbuttons(self):
+                return 16
+
+        buttons = {index: False for index in PROFILE_DS4.button_map.values()}
+        buttons[PROFILE_DS4.dpad_button_map[UP]] = True
+        joystick = _SixteenButtonJoystick(self.axes, buttons)
+
+        run(
+            joystick,
+            PROFILE_DS4,
+            self.output,
+            self.rudder_output,
+            self.mouse_state,
+            combo_detector=self.combo_detector,
+            edge_tracker=self.edge_tracker,
+            dispatch_fire=lambda fire, output: self.fires.append(fire),
+        )
+
+        self.assertEqual(self.fires, [])
+
 
 class TestGenericButtonPassthrough(unittest.TestCase):
     def setUp(self):
